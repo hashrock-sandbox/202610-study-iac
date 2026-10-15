@@ -15,7 +15,7 @@ variable "region" {
 variable "enable_lb" {
   description = "Put Cloud Run behind an external HTTPS load balancer"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "lb_domain" {

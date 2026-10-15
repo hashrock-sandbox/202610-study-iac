@@ -8,6 +8,8 @@ GCP + Terraform の学習用リポジトリ。
 
 ![GCP 構成](docs/gcp-architecture.png)
 
+> LB と Serverless NEG は `app/variables.tf` の `enable_lb` が `true` のときだけ作られる（LB は常時課金のため、普段は `false`）。`false` のときは Cloud Run の `*.run.app` に直接アクセスする。
+
 元ボード: https://jam.hashrock.info/boards/c2e43196-0063-4601-90d8-a7ea49e9b35b
 
 ### 全体図（CI / WIF / SA を含む）
