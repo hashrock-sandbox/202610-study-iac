@@ -17,3 +17,9 @@ variable "github_repository_id" {
   type        = string
   default     = "1420541405" # hashrock-sandbox/202610-study-iac
 }
+
+variable "github_repository" {
+  description = "GitHub repository (owner/name) whose workflows may deploy"
+  type        = string
+  default     = "hashrock-sandbox/202610-study-iac"
+}
