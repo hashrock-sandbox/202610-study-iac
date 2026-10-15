@@ -4,6 +4,14 @@ GCP + Terraform の学習用リポジトリ。
 
 ## 構成図
 
+### GCP 構成（実行時の通信）
+
+![GCP 構成](docs/gcp-architecture.png)
+
+元ボード: https://jam.hashrock.info/boards/c2e43196-0063-4601-90d8-a7ea49e9b35b
+
+### 全体図（CI / WIF / SA を含む）
+
 https://jam.hashrock.info/boards/6a44e0cc-bcba-4a1f-9113-0af04e5ad014
 
 ## ディレクトリ
