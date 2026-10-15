@@ -90,6 +90,7 @@ resource "google_project_iam_member" "tf_apply" {
     "roles/storage.admin",
     "roles/run.admin",
     "roles/artifactregistry.admin",
+    "roles/compute.loadBalancerAdmin", # LB, NEG, certs, global addresses
     "roles/serviceusage.serviceUsageAdmin",
   ])
   project = var.project_id
