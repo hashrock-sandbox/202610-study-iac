@@ -75,6 +75,7 @@ resource "google_project_iam_member" "tf_apply" {
   for_each = toset([
     "roles/storage.admin",
     "roles/run.admin",
+    "roles/artifactregistry.admin",
     "roles/iam.serviceAccountAdmin",
     "roles/serviceusage.serviceUsageAdmin",
   ])
@@ -97,6 +98,35 @@ resource "google_service_account_iam_member" "tf_apply_act_as_app" {
 # PR runs get ref "refs/pull/N/merge", so they can never match this.
 resource "google_service_account_iam_member" "tf_apply_wif" {
   service_account_id = google_service_account.tf_apply.name
+  role               = "roles/iam.workloadIdentityUser"
+  member             = "principalSet://iam.googleapis.com/${local.pool_name}/attribute.ref/refs/heads/main"
+}
+
+# ---- deploy: push images and roll out new Cloud Run revisions, only from main ----
+
+resource "google_service_account" "deploy" {
+  account_id   = "github-deploy"
+  display_name = "GitHub Actions app deploy"
+}
+
+resource "google_project_iam_member" "deploy" {
+  for_each = toset([
+    "roles/artifactregistry.writer",
+    "roles/run.developer", # update services, but not change their IAM
+  ])
+  project = var.project_id
+  role    = each.value
+  member  = "serviceAccount:${google_service_account.deploy.email}"
+}
+
+resource "google_service_account_iam_member" "deploy_act_as_app" {
+  service_account_id = data.google_service_account.app.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${google_service_account.deploy.email}"
+}
+
+resource "google_service_account_iam_member" "deploy_wif" {
+  service_account_id = google_service_account.deploy.name
   role               = "roles/iam.workloadIdentityUser"
   member             = "principalSet://iam.googleapis.com/${local.pool_name}/attribute.ref/refs/heads/main"
 }

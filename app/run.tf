@@ -14,6 +14,7 @@ resource "google_cloud_run_v2_service" "hello" {
     }
 
     containers {
+      # Placeholder for the first create only; see ignore_changes below.
       image = "us-docker.pkg.dev/cloudrun/container/hello"
 
       # Changing the template creates a new revision, which requires actAs on study-app.
@@ -30,6 +31,16 @@ resource "google_cloud_run_v2_service" "hello" {
         cpu_idle = true # bill CPU only while handling requests
       }
     }
+  }
+
+  lifecycle {
+    ignore_changes = [
+      # The deploy workflow rolls out new images; Terraform only owns everything else.
+      template[0].containers[0].image,
+      # Set by gcloud on every deploy.
+      client,
+      client_version,
+    ]
   }
 
   depends_on = [google_project_service.this["run.googleapis.com"]]
