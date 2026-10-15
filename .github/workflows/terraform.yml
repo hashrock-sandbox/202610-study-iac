@@ -18,11 +18,11 @@ jobs:
       contents: read
       id-token: write # required to request the GitHub OIDC token
     strategy:
-      # Stacks depend on each other (01 <- 02 <- 03), so run them one at a time in order.
+      # Run stacks one at a time in case they ever depend on each other.
       max-parallel: 1
       fail-fast: true
       matrix:
-        stack: [01-gcs-bucket, 02-iam, 03-cloud-run]
+        stack: [app]
     defaults:
       run:
         working-directory: ${{ matrix.stack }}
