@@ -5,6 +5,9 @@ resource "google_cloud_run_v2_service" "hello" {
   # Provider defaults to true; disable so `terraform destroy` works while studying.
   deletion_protection = false
 
+  # With the LB on, reject direct hits to *.run.app so all traffic goes through the LB.
+  ingress = var.enable_lb ? "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER" : "INGRESS_TRAFFIC_ALL"
+
   template {
     service_account = google_service_account.app.email
 
