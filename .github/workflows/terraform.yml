@@ -1,0 +1,59 @@
+name: terraform
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Never use pull_request_target here: it would hand GCP credentials to fork PRs.
+
+env:
+  WIF_PROVIDER: projects/844155759472/locations/global/workloadIdentityPools/github/providers/github-oidc
+  TF_IN_AUTOMATION: "true"
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # required to request the GitHub OIDC token
+    strategy:
+      # Stacks depend on each other (01 <- 02 <- 03), so run them one at a time in order.
+      max-parallel: 1
+      fail-fast: true
+      matrix:
+        stack: [01-gcs-bucket, 02-iam, 03-cloud-run]
+    defaults:
+      run:
+        working-directory: ${{ matrix.stack }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          # PRs get the read-only SA; only pushes to main get the one that can write.
+          service_account: ${{ github.event_name == 'push' && 'github-tf-apply@hashrock-iac-study.iam.gserviceaccount.com' || 'github-tf-plan@hashrock-iac-study.iam.gserviceaccount.com' }}
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.5.5
+          terraform_wrapper: false
+
+      - run: terraform fmt -check -diff
+      - run: terraform init -input=false
+      - run: terraform validate
+
+      - name: plan
+        run: |
+          terraform plan -input=false -no-color -out=tfplan | tee plan.txt
+          {
+            echo "### ${{ matrix.stack }}"
+            echo '```'
+            grep -E '^\s+# |^Plan:|^No changes' plan.txt || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: apply
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: terraform apply -input=false tfplan
