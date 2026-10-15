@@ -1,0 +1,50 @@
+name: deploy-hello-app
+
+on:
+  push:
+    branches: [main]
+    paths: ["hello-app/**", ".github/workflows/deploy-hello-app.yml"]
+  workflow_dispatch:
+
+env:
+  WIF_PROVIDER: projects/844155759472/locations/global/workloadIdentityPools/github/providers/github-oidc
+  SERVICE_ACCOUNT: github-deploy@hashrock-iac-study.iam.gserviceaccount.com
+  REGION: asia-northeast1
+  IMAGE: asia-northeast1-docker.pkg.dev/hashrock-iac-study/apps/hello-app
+  SERVICE: study-hello
+
+# Don't let two deploys race; the later one wins.
+concurrency:
+  group: deploy-hello-app
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v3
+
+      - run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      # Tag with the commit SHA so every revision maps back to a commit.
+      - run: docker build -t "$IMAGE:$GITHUB_SHA" hello-app
+      - run: docker push "$IMAGE:$GITHUB_SHA"
+
+      - name: deploy
+        run: |
+          gcloud run deploy "$SERVICE" \
+            --image "$IMAGE:$GITHUB_SHA" \
+            --region "$REGION" \
+            --quiet
+          gcloud run services describe "$SERVICE" --region "$REGION" --format='value(status.url)' \
+            | xargs -I{} echo "Deployed {} ($GITHUB_SHA)" >> "$GITHUB_STEP_SUMMARY"
