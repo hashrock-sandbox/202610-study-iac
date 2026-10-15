@@ -1,6 +1,10 @@
 # This stack is applied by hand only. CI never manages its own credentials.
 
 locals {
+  workflow_prefix = "${var.github_repository}/.github/workflows"
+}
+
+locals {
   services = [
     "iamcredentials.googleapis.com",
     "sts.googleapis.com",
@@ -27,6 +31,16 @@ resource "google_iam_workload_identity_pool_provider" "github" {
     "google.subject"          = "assertion.sub"
     "attribute.repository_id" = "assertion.repository_id"
     "attribute.ref"           = "assertion.ref"
+
+    # ref alone is not enough: issue_comment, schedule etc. also run with ref=main,
+    # and anyone can comment on a public repo. Pin write access to a specific
+    # workflow file on main *and* the events we expect, collapsed into one label.
+    "attribute.deployer" = <<-EOT
+      assertion.ref != 'refs/heads/main' ? 'none' :
+      assertion.job_workflow_ref == '${local.workflow_prefix}/terraform.yml@refs/heads/main' && assertion.event_name == 'push' ? 'tf-apply' :
+      assertion.job_workflow_ref == '${local.workflow_prefix}/deploy-hello-app.yml@refs/heads/main' && assertion.event_name in ['push', 'workflow_dispatch'] ? 'deploy' :
+      'none'
+    EOT
   }
 
   # Without this, ANY GitHub repository could exchange tokens with this pool.
@@ -76,7 +90,6 @@ resource "google_project_iam_member" "tf_apply" {
     "roles/storage.admin",
     "roles/run.admin",
     "roles/artifactregistry.admin",
-    "roles/iam.serviceAccountAdmin",
     "roles/serviceusage.serviceUsageAdmin",
   ])
   project = var.project_id
@@ -95,11 +108,36 @@ resource "google_service_account_iam_member" "tf_apply_act_as_app" {
   member             = "serviceAccount:${google_service_account.tf_apply.email}"
 }
 
-# PR runs get ref "refs/pull/N/merge", so they can never match this.
+# Only terraform.yml on main, triggered by push (see attribute.deployer).
 resource "google_service_account_iam_member" "tf_apply_wif" {
   service_account_id = google_service_account.tf_apply.name
   role               = "roles/iam.workloadIdentityUser"
-  member             = "principalSet://iam.googleapis.com/${local.pool_name}/attribute.ref/refs/heads/main"
+  member             = "principalSet://iam.googleapis.com/${local.pool_name}/attribute.deployer/tf-apply"
+}
+
+# serviceAccountAdmin includes setIamPolicy on every SA in the project, which lets
+# the holder grant itself access to any other SA (privilege escalation).
+# This role can manage SAs but never change who may use them.
+resource "google_project_iam_custom_role" "sa_manager" {
+  role_id     = "terraformServiceAccountManager"
+  title       = "Terraform Service Account Manager"
+  description = "Create/update/delete service accounts without setIamPolicy or key creation"
+  permissions = [
+    "iam.serviceAccounts.create",
+    "iam.serviceAccounts.delete",
+    "iam.serviceAccounts.disable",
+    "iam.serviceAccounts.enable",
+    "iam.serviceAccounts.get",
+    "iam.serviceAccounts.getIamPolicy",
+    "iam.serviceAccounts.list",
+    "iam.serviceAccounts.update",
+  ]
+}
+
+resource "google_project_iam_member" "tf_apply_sa_manager" {
+  project = var.project_id
+  role    = google_project_iam_custom_role.sa_manager.id
+  member  = "serviceAccount:${google_service_account.tf_apply.email}"
 }
 
 # ---- deploy: push images and roll out new Cloud Run revisions, only from main ----
@@ -128,7 +166,21 @@ resource "google_service_account_iam_member" "deploy_act_as_app" {
 resource "google_service_account_iam_member" "deploy_wif" {
   service_account_id = google_service_account.deploy.name
   role               = "roles/iam.workloadIdentityUser"
-  member             = "principalSet://iam.googleapis.com/${local.pool_name}/attribute.ref/refs/heads/main"
+  member             = "principalSet://iam.googleapis.com/${local.pool_name}/attribute.deployer/deploy"
+}
+
+# ---- default service accounts ----
+
+# GCP auto-creates the Compute Engine default SA with roles/editor. Nothing here
+# uses it, and anyone who can act as it gets Editor, so strip that role.
+# (google_project_default_service_accounts is a no-op unless the Compute API is
+# enabled, which it is not in this project.)
+data "google_project" "this" {}
+
+resource "google_project_iam_member_remove" "compute_default_editor" {
+  project = var.project_id
+  role    = "roles/editor"
+  member  = "serviceAccount:${data.google_project.this.number}-compute@developer.gserviceaccount.com"
 }
 
 # ---- state bucket: both need it (plan takes a lock too) ----
