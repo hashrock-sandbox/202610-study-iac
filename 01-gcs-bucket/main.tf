@@ -11,5 +11,6 @@ resource "google_storage_bucket" "study" {
   labels = {
     managed_by = "terraform"
     purpose    = "study"
+    owner      = "hashrock"
   }
 }

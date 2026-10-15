@@ -26,6 +26,12 @@ resource "google_cloud_run_v2_service" "hello" {
     containers {
       image = "us-docker.pkg.dev/cloudrun/container/hello"
 
+      # Changing the template creates a new revision, which requires actAs on study-app.
+      env {
+        name  = "STUDY_MESSAGE"
+        value = "deployed by GitHub Actions"
+      }
+
       resources {
         limits = {
           cpu    = "1"
