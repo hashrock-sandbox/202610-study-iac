@@ -9,3 +9,7 @@ output "plan_service_account" {
 output "apply_service_account" {
   value = google_service_account.tf_apply.email
 }
+
+output "deploy_service_account" {
+  value = google_service_account.deploy.email
+}
