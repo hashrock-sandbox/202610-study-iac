@@ -76,12 +76,22 @@ resource "google_project_iam_member" "tf_apply" {
     "roles/storage.admin",
     "roles/run.admin",
     "roles/iam.serviceAccountAdmin",
-    "roles/iam.serviceAccountUser", # deploy Cloud Run as study-app
     "roles/serviceusage.serviceUsageAdmin",
   ])
   project = var.project_id
   role    = each.value
   member  = "serviceAccount:${google_service_account.tf_apply.email}"
+}
+
+# Allow deploying Cloud Run as study-app only, not as every SA in the project.
+data "google_service_account" "app" {
+  account_id = "study-app"
+}
+
+resource "google_service_account_iam_member" "tf_apply_act_as_app" {
+  service_account_id = data.google_service_account.app.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${google_service_account.tf_apply.email}"
 }
 
 # PR runs get ref "refs/pull/N/merge", so they can never match this.
