@@ -1,13 +1,3 @@
-resource "google_project_service" "run" {
-  service            = "run.googleapis.com"
-  disable_on_destroy = false
-}
-
-# Service account is managed in 02-iam; reuse it as the runtime identity.
-data "google_service_account" "app" {
-  account_id = "study-app"
-}
-
 resource "google_cloud_run_v2_service" "hello" {
   name     = "study-hello"
   location = var.region
@@ -16,7 +6,7 @@ resource "google_cloud_run_v2_service" "hello" {
   deletion_protection = false
 
   template {
-    service_account = data.google_service_account.app.email
+    service_account = google_service_account.app.email
 
     scaling {
       min_instance_count = 0 # scale to zero = no cost while idle
@@ -42,7 +32,7 @@ resource "google_cloud_run_v2_service" "hello" {
     }
   }
 
-  depends_on = [google_project_service.run]
+  depends_on = [google_project_service.this["run.googleapis.com"]]
 }
 
 # Allow unauthenticated access so the URL can be opened in a browser.
